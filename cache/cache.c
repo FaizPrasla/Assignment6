@@ -151,6 +151,7 @@ cache_line_t *get_line(word_t addr)
     return NULL;
 }
 
+/// WTF THIS SHIT IS GAY
 
 /* TODO:
  * Select the line to fill with the new cache line
