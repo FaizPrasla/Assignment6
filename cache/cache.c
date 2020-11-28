@@ -12,7 +12,7 @@
  *  address. Hence, an M operation can result in two cache hits, or a miss and a
  *  hit plus an possible eviction.
  *
- * The function printSummary() is given to print output.
+ * The function printSummary() ias given to print output.
  * Please use this function to print the number of hits, misses and evictions.
  * This is crucial for the driver to evaluate your work. 
  */
@@ -73,6 +73,8 @@ typedef struct cache {
 } cache_t;
 
 cache_t cache;
+mem_addr_t s_mask;
+
 
 /* TODO: add more globals, structs, macros if necessary */
 
@@ -94,7 +96,7 @@ void initCache(int s_in, int b_in, int E_in)
 
     int i, j;
     cache.sets = (cache_set_t*) calloc(S, sizeof(cache_set_t));
-    for (i=0; i<S; i++){
+    for (i=0; i < S; i++){
         cache.sets[i].lines = (cache_line_t*) calloc(E, sizeof(cache_line_t));
         for (j=0; j<E; j++){
             cache.sets[i].lines[j].valid = 0;
@@ -103,8 +105,8 @@ void initCache(int s_in, int b_in, int E_in)
             cache.sets[i].lines[j].data = calloc(B, sizeof(byte_t));
         }
     }
-
     /* TODO: add more code for initialization */
+    s_mask = (mem_addr_t) (S - 1);
 }
 
 /* 
@@ -113,12 +115,11 @@ void initCache(int s_in, int b_in, int E_in)
 void freeCache()
 {
     int i;
-    for (i=0; i<S; i++){
+    for (i = 0; i < S; i++){
         free(cache.sets[i].lines);     
     }
     free(cache.sets);
 }
-
 
 /* TODO:
  * Get the line for address contained in the cache
@@ -127,7 +128,26 @@ void freeCache()
  */
 cache_line_t *get_line(word_t addr)
 {
-    /* your implementation */
+    mem_addr_t tag_add = addr >> (s + b);
+    cache_set_t cache_set = cache.sets[(mem_addr_t) ((addr >> b) & s_mask)];
+    int i;
+    for (i = 0; i < E; i++) {
+        if (cache_set.lines[i].tag == tag_add){
+            if(cache_set.lines[i].valid){
+                hit_count++;
+                int j;
+                for (j = 0; j < E; j++) {
+                if (cache_set.lines[j].valid ) {
+                    if(cache_set.lines[j].lru < cache_set.lines[i].lru)
+                    cache_set.lines[j].lru++;
+                }
+            }
+            cache_set.lines[i].lru = 0;
+            return &cache_set.lines[i];
+            } 
+        }
+    }
+    miss_count++;
     return NULL;
 }
 
@@ -138,8 +158,40 @@ cache_line_t *get_line(word_t addr)
  */
 cache_line_t *select_line(word_t addr)
 {
-    /* your implementation */
-    return NULL;
+
+    mem_addr_t tag_add = addr >> (s + b);
+    cache_set_t cache_set = cache.sets[(mem_addr_t) ((addr >> b) & s_mask)];
+    int j;
+    int maxIndex = 0;
+    unsigned long long int maxLru = 0;
+    for (j = 0; j < E && cache_set.lines[j].valid; j++) {
+        if (cache_set.lines[j].lru >= maxLru) {
+            maxLru = cache_set.lines[j].lru;
+            maxIndex = j;
+        }
+    }
+    if (j != E) {
+        // found an invalid entry
+        // update other entries 
+        for (int k = 0; k < E; k++)
+            if (cache_set.lines[k].valid)
+                ++cache_set.lines[k].lru;
+        // insert line 
+        cache_set.lines[j].lru = 0;
+        cache_set.lines[j].valid = 1;
+        cache_set.lines[j].tag = tag_add;
+        // return
+        return &cache_set.lines[j];
+    } else {
+        // all entry is valid, replace the oldest one
+        eviction_count++;
+        for (int k = 0; k < E; k++)
+            cache_set.lines[k].lru++;
+        cache_set.lines[maxIndex].lru = 0;
+        cache_set.lines[maxIndex].tag = tag_add;
+        return &cache_set.lines[maxIndex];
+    }
+
 }
 
 /*  TODO:
@@ -148,8 +200,7 @@ cache_line_t *select_line(word_t addr)
  */
 bool check_hit(word_t pos) 
 {
-    /* your implementation */
-    return false;
+    return get_line(pos) != NULL ? 1 : 0;
 }
 
 /*  TODO:
@@ -160,8 +211,7 @@ bool check_hit(word_t pos)
  */ 
 bool handle_miss(word_t pos, void *block, word_t *evicted_pos, void *evicted_block) 
 {
-    /* your implementation */
-    return false;
+    return select_line(pos) != NULL ? 1 : 0;
 }
 
 
