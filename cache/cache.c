@@ -151,27 +151,25 @@ cache_line_t *get_line(word_t addr)
     return NULL;
 }
 
-/// WTF THIS SHIT IS GAY
-
 /* TODO:
  * Select the line to fill with the new cache line
  * Return the cache line selected to filled in by addr
  */
 cache_line_t *select_line(word_t addr)
 {
-
     mem_addr_t tag_add = addr >> (s + b);
     cache_set_t cache_set = cache.sets[(mem_addr_t) ((addr >> b) & s_mask)];
-    int j;
-    int maxIndex = 0;
-    unsigned long long int maxLru = 0;
-    for (j = 0; j < E && cache_set.lines[j].valid; j++) {
-        if (cache_set.lines[j].lru >= maxLru) {
-            maxLru = cache_set.lines[j].lru;
-            maxIndex = j;
+    int j = 0;
+    int biggest_I = 0;
+    unsigned long long int farLru = 0;
+    while(j < E && cache_set.lines[j].valid){
+        if (cache_set.lines[j].lru >= farLru) {
+            farLru = cache_set.lines[j].lru;
+            biggest_I = j;
         }
+        j++;
     }
-    if (j != E) {
+     if (j != E) {
         // found an invalid entry
         // update other entries 
         for (int k = 0; k < E; k++)
@@ -188,11 +186,10 @@ cache_line_t *select_line(word_t addr)
         eviction_count++;
         for (int k = 0; k < E; k++)
             cache_set.lines[k].lru++;
-        cache_set.lines[maxIndex].lru = 0;
-        cache_set.lines[maxIndex].tag = tag_add;
-        return &cache_set.lines[maxIndex];
+        cache_set.lines[biggest_I].lru = 0;
+        cache_set.lines[biggest_I].tag = tag_add;
+        return &cache_set.lines[biggest_I];
     }
-
 }
 
 /*  TODO:
