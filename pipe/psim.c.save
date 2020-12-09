@@ -782,11 +782,11 @@ void do_id_stage()
 }
 
 bool_t set_CC_Val(){
-    bool_t m_stat = !(mem_wb_next -> status == STAT_HLT || mem_wb_next -> status == STAT_ADR
+    bool_t m_stat = (mem_wb_next -> status == STAT_HLT || mem_wb_next -> status == STAT_ADR
         || mem_wb_next -> status == STAT_INS);
-    bool_t w_stat = !(mem_wb_curr -> status == STAT_HLT || mem_wb_curr -> status == STAT_ADR
+    bool_t w_stat = (mem_wb_curr -> status == STAT_HLT || mem_wb_curr -> status == STAT_ADR
         || mem_wb_curr -> status == STAT_INS);
-    return (id_ex_curr -> icode == I_ALU) && m_stat && w_stat; 
+    return !m_stat && !w_stat; 
 }
 
 /************************** Execute stage **************************
@@ -796,7 +796,7 @@ bool_t set_CC_Val(){
  *******************************************************************/
 void do_ex_stage()
 {
-
+    /* dummy placeholders, replace them with your implementation */
     cc_in = DEFAULT_CC; /* should not overwrite original cc */
     /* some useful variables for logging purpose */
     bool_t setcc = FALSE;
@@ -806,13 +806,10 @@ void do_ex_stage()
     /* logging functions, do not change these */
     word_t temp = 0;
     ex_mem_next -> vale = temp;
+    cc_in = cc;
     alua = id_ex_curr -> vala;
     alub = id_ex_curr -> valb;
-    if(id_ex_curr->icode == I_ALU){
-        alufun = id_ex_curr->ifun;
-    }else{
-        alufun = A_ADD;
-    }
+    ex_mem_next -> vala = alua;
     switch (id_ex_curr -> icode) {
         case I_HALT: break;
 
@@ -836,8 +833,9 @@ void do_ex_stage()
             break;
 
         case I_ALU:
-            ex_mem_next -> vale = compute_alu(alufun, alua, alub);
-            cc_in = compute_cc(alufun, alua, alub);
+            ex_mem_next -> vale = compute_alu(id_ex_curr -> ifun, alua, alub);
+            cc_in = compute_cc(id_ex_curr -> ifun, alua, alub);
+            setcc = set_CC_Val();
             break;
 
         case I_JMP:
@@ -864,8 +862,6 @@ void do_ex_stage()
             printf("icode is not valid (%d)", ex_mem_next -> icode);
             break;
     }
-    ex_mem_next -> vala = alua;
-    setcc = set_CC_Val();
     e_bcond = cond_holds(cc, id_ex_curr->ifun);
     ex_mem_next -> takebranch = e_bcond;
     ex_mem_next -> vala = id_ex_curr->vala;
@@ -873,14 +869,14 @@ void do_ex_stage()
     ex_mem_next -> icode = id_ex_curr->icode;
     bool_t my_cond = (id_ex_curr -> icode == I_RRMOVQ && !(ex_mem_next -> takebranch));
     ex_mem_next -> deste = my_cond ? REG_NONE : id_ex_curr -> deste;
-    if((!my_cond)){
+    //if((!my_cond)){
         ex_mem_next -> destm = id_ex_curr -> destm;
         ex_mem_next -> srca = id_ex_curr -> srca;
         ex_mem_next -> status =  id_ex_curr -> status;
-    }
+    //}
 
-   
-   if (id_ex_curr->icode == I_JMP){
+        if (id_ex_curr->icode == I_JMP)
+    {
         sim_log("\tExecute: instr = %s, cc = %s, branch %staken\n",
                 iname(HPACK(id_ex_curr->icode, id_ex_curr->ifun)),
                 cc_name(cc),
@@ -888,10 +884,12 @@ void do_ex_stage()
     }
     sim_log("\tExecute: ALU: %c 0x%llx 0x%llx --> 0x%llx\n",
             op_name(alufun), alua, alub, ex_mem_next->vale);
-    if (setcc){
+    if (setcc)
+    {
         cc = cc_in;
         sim_log("\tExecute: New cc=%s\n", cc_name(cc_in));
     }
+
 }
 
 

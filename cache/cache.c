@@ -134,11 +134,11 @@ cache_line_t *get_line(word_t addr)
     for (i = 0; i < E; i++) {
         if (cache_set.lines[i].tag == tag_add){
             if(cache_set.lines[i].valid){
-                hit_count++;
+                //hit_count++;
                 int j;
                 for (j = 0; j < E; j++) {
-                if (cache_set.lines[j].valid ) {
-                    if(cache_set.lines[j].lru < cache_set.lines[i].lru)
+                if (cache_set.lines[j].valid) {
+                    if(cache_set.lines[i].lru > cache_set.lines[j].lru)
                     cache_set.lines[j].lru++;
                 }
             }
@@ -147,7 +147,7 @@ cache_line_t *get_line(word_t addr)
             } 
         }
     }
-    miss_count++;
+    //miss_count++;
     return NULL;
 }
 
@@ -159,37 +159,42 @@ cache_line_t *select_line(word_t addr)
 {
     mem_addr_t tag_add = addr >> (s + b);
     cache_set_t cache_set = cache.sets[(mem_addr_t) ((addr >> b) & s_mask)];
-    int j = 0;
+    int count = 0;
     int biggest_I = 0;
-    unsigned long long int farLru = 0;
-    while(j < E && cache_set.lines[j].valid){
-        if (cache_set.lines[j].lru >= farLru) {
-            farLru = cache_set.lines[j].lru;
-            biggest_I = j;
+    unsigned int farLru = 0;
+    while(count < E && cache_set.lines[count].valid){
+        if (cache_set.lines[count].lru >= farLru) {
+            farLru = cache_set.lines[count].lru;
+            biggest_I = count;
         }
-        j++;
+        count++;
     }
-     if (j != E) {
-        // found an invalid entry
-        // update other entries 
-        for (int k = 0; k < E; k++)
-            if (cache_set.lines[k].valid)
-                ++cache_set.lines[k].lru;
-        // insert line 
-        cache_set.lines[j].lru = 0;
-        cache_set.lines[j].valid = 1;
-        cache_set.lines[j].tag = tag_add;
-        // return
-        return &cache_set.lines[j];
-    } else {
-        // all entry is valid, replace the oldest one
+    int f = 0;
+    while(f < E){
+        if (cache_set.lines[f].valid){
+            cache_set.lines[f].lru++; 
+        }  
+    f++;
+    }
+    
+    if (count == E) {
+        int k = 0;
+        while(k < E){
+        if (cache_set.lines[k].valid){
+            cache_set.lines[k].lru++; 
+        }  
+        k++;     
+    } 
         eviction_count++;
-        for (int k = 0; k < E; k++)
-            cache_set.lines[k].lru++;
         cache_set.lines[biggest_I].lru = 0;
         cache_set.lines[biggest_I].tag = tag_add;
-        return &cache_set.lines[biggest_I];
+    } else {  
+        cache_set.lines[count].lru = 0;
+        cache_set.lines[count].valid = 1;
+        cache_set.lines[count].tag = tag_add;
     }
+    return &cache_set.lines[count];
+ 
 }
 
 /*  TODO:
@@ -198,7 +203,12 @@ cache_line_t *select_line(word_t addr)
  */
 bool check_hit(word_t pos) 
 {
-    return get_line(pos) != NULL ? 1 : 0;
+    if(get_line(pos)){
+        hit_count++;
+        return 1;
+    }
+    miss_count++;
+    return 0;   
 }
 
 /*  TODO:
@@ -209,9 +219,8 @@ bool check_hit(word_t pos)
  */ 
 bool handle_miss(word_t pos, void *block, word_t *evicted_pos, void *evicted_block) 
 {
-    return select_line(pos) != NULL ? 1 : 0;
+    return select_line(pos) ? 1 : 0;
 }
-
 
 /* 
  * Access data at memory address addr
