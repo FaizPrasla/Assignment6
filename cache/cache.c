@@ -162,15 +162,15 @@ cache_line_t *select_line(word_t addr)
     int count = 0;
     int biggest_I = 0;
     unsigned int farLru = 0;
-    while(count < E && cache_set.lines[count].valid){
-        if (cache_set.lines[count].lru >= farLru) {
+    while(count <= E && cache_set.lines[count].valid){
+        if (cache_set.lines[count].lru > farLru) {
             farLru = cache_set.lines[count].lru;
             biggest_I = count;
         }
         count++;
     }
     int f = 0;
-    while(f < E){
+    while(f <= E){
         if (cache_set.lines[f].valid){
             cache_set.lines[f].lru++; 
         }  
@@ -179,12 +179,12 @@ cache_line_t *select_line(word_t addr)
     
     if (count == E) {
         int k = 0;
-        while(k < E){
+        while(k <= E){
         if (cache_set.lines[k].valid){
             cache_set.lines[k].lru++; 
         }  
         k++;     
-    } 
+    }
         eviction_count++;
         cache_set.lines[biggest_I].lru = 0;
         cache_set.lines[biggest_I].tag = tag_add;
@@ -194,7 +194,6 @@ cache_line_t *select_line(word_t addr)
         cache_set.lines[count].tag = tag_add;
     }
     return &cache_set.lines[count];
- 
 }
 
 /*  TODO:
