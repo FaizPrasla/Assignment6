@@ -636,7 +636,7 @@ void do_if_stage()
     }else if(imem_error){
         if_id_next->status = STAT_ADR;
     }
-    
+
     if_id_next -> ra = HI4(reg_ID);
     if_id_next -> rb = LO4(reg_ID);
     if_id_next -> valp = temp_P;
@@ -646,7 +646,6 @@ void do_if_stage()
     }else{
         pc_next -> pc = if_id_next -> valp;
     }
-
     /* logging function, do not change this */
     if (!imem_error) {
         sim_log("\tFetch: f_pc = 0x%llx, f_instr = %s\n",
@@ -657,14 +656,14 @@ void do_if_stage()
 void next_vala(){
     if (if_id_curr -> icode == I_CALL || if_id_curr -> icode == I_JMP) {
         id_ex_next->vala = if_id_curr->valp;
-    } else if (id_ex_next-> srca == ex_mem_next->deste) {
-        id_ex_next->vala = ex_mem_next->vale;
-    } else if (id_ex_next->srca == ex_mem_curr->destm) {
+    }else if (id_ex_next->srca == ex_mem_curr->destm) {
         id_ex_next->vala = mem_wb_next->valm;
-    } else if (id_ex_next->srca == ex_mem_curr->deste) {
-        id_ex_next->vala = ex_mem_curr->vale;
+    }else if (id_ex_next-> srca == ex_mem_next->deste) {
+        id_ex_next->vala = ex_mem_next->vale;
     } else if (id_ex_next->srca == mem_wb_curr->destm) {
         id_ex_next->vala = mem_wb_curr->valm;
+    } else if (id_ex_next->srca == ex_mem_curr->deste) {
+        id_ex_next->vala = ex_mem_curr->vale;
     } else if (id_ex_next->srca == mem_wb_curr->deste) {
         id_ex_next->vala = mem_wb_curr->vale;
     } else {
@@ -673,14 +672,15 @@ void next_vala(){
 }
 
 void next_valb(){
-    if (id_ex_next-> srcb == ex_mem_next->deste) {
-        id_ex_next->valb = ex_mem_next->vale;
-    } else if (id_ex_next->srcb == ex_mem_curr->destm) {
+
+    if (id_ex_next->srcb == ex_mem_curr->destm) {
         id_ex_next->valb = mem_wb_next->valm;
-    } else if (id_ex_next->srcb == ex_mem_curr->deste) {
-        id_ex_next->valb = ex_mem_curr->vale;
+    } else if (id_ex_next-> srcb == ex_mem_next->deste) {
+        id_ex_next->valb = ex_mem_next->vale;
     } else if (id_ex_next->srcb == mem_wb_curr->destm) {
         id_ex_next->valb = mem_wb_curr->valm;
+    } else if (id_ex_next->srcb == ex_mem_curr->deste) {
+        id_ex_next->valb = ex_mem_curr->vale;
     } else if (id_ex_next->srcb == mem_wb_curr->deste) {
         id_ex_next->valb = mem_wb_curr->vale;
     } else {
@@ -741,10 +741,12 @@ void do_id_stage()
 
         case I_JMP: 
             id_ex_next -> valc = if_id_curr -> valc;
+            id_ex_next->vala = if_id_curr->valp;
             break;
 
         case I_CALL:
             id_ex_next -> valc = if_id_curr -> valc;
+            id_ex_next->vala = if_id_curr->valp;
             id_ex_next -> srcb = REG_RSP;
             id_ex_next -> deste = REG_RSP;
             break;
@@ -771,13 +773,12 @@ void do_id_stage()
         default:
             printf("icode is not valid (%d)", if_id_curr -> icode);
             break;
-    }
-    next_vala();
-    next_valb();
-    
+    }    
     id_ex_next->ifun = if_id_curr->ifun;
     id_ex_next->status = if_id_curr->status;
     id_ex_next->icode = if_id_curr->icode;
+    next_vala();
+    next_valb();
     
 }
 
@@ -808,11 +809,6 @@ void do_ex_stage()
     ex_mem_next -> vale = temp;
     alua = id_ex_curr -> vala;
     alub = id_ex_curr -> valb;
-    if(id_ex_curr->icode == I_ALU){
-        alufun = id_ex_curr->ifun;
-    }else{
-        alufun = A_ADD;
-    }
     switch (id_ex_curr -> icode) {
         case I_HALT: break;
 
@@ -820,7 +816,6 @@ void do_ex_stage()
     
         case I_RRMOVQ: // aka CMOVQ
             ex_mem_next -> vale = alua;
-           // e_bcond = cond_holds(cc_in, id_ex_curr -> ifun);
             break;
 
         case I_IRMOVQ:
@@ -836,12 +831,11 @@ void do_ex_stage()
             break;
 
         case I_ALU:
-            ex_mem_next -> vale = compute_alu(alufun, alua, alub);
-            cc_in = compute_cc(alufun, alua, alub);
+            ex_mem_next -> vale = compute_alu(id_ex_curr -> ifun, alua, alub);
+            cc_in = compute_cc(id_ex_curr -> ifun, alua, alub);
             break;
 
         case I_JMP:
-            //e_bcond = cond_holds(cc_in, id_ex_curr -> ifun);
             break;
 
         case I_CALL:
@@ -873,13 +867,6 @@ void do_ex_stage()
     ex_mem_next -> icode = id_ex_curr->icode;
     bool_t my_cond = (id_ex_curr -> icode == I_RRMOVQ && !(ex_mem_next -> takebranch));
     ex_mem_next -> deste = my_cond ? REG_NONE : id_ex_curr -> deste;
-    if((!my_cond)){
-        ex_mem_next -> destm = id_ex_curr -> destm;
-        ex_mem_next -> srca = id_ex_curr -> srca;
-        ex_mem_next -> status =  id_ex_curr -> status;
-    }
-
-   
    if (id_ex_curr->icode == I_JMP){
         sim_log("\tExecute: instr = %s, cc = %s, branch %staken\n",
                 iname(HPACK(id_ex_curr->icode, id_ex_curr->ifun)),
@@ -892,6 +879,9 @@ void do_ex_stage()
         cc = cc_in;
         sim_log("\tExecute: New cc=%s\n", cc_name(cc_in));
     }
+    ex_mem_next -> destm = id_ex_curr -> destm;
+    ex_mem_next -> srca = id_ex_curr -> srca;
+    ex_mem_next -> status =  id_ex_curr -> status;
 }
 
 
@@ -966,14 +956,12 @@ void do_mem_stage()
             printf("icode is not valid (%d)", ex_mem_curr -> icode);
             break;
     }
-
     mem_wb_next -> status = !dmem_error ? ex_mem_curr -> status : STAT_ADR;
     mem_wb_next -> icode = ex_mem_curr -> icode;
     mem_wb_next -> ifun = ex_mem_curr -> ifun;
     mem_wb_next -> vale = ex_mem_curr -> vale;
     mem_wb_next -> destm = ex_mem_curr -> destm;
     mem_wb_next -> deste = ex_mem_curr -> deste;
-
     if (mem_write)
     {
         if (!set_word_val(mem, mem_addr, mem_data))
@@ -1007,6 +995,7 @@ void do_wb_stage()
     wb_valE = mem_wb_curr -> vale;
     wb_destM = mem_wb_curr -> destm;
     wb_valM = mem_wb_curr -> valm;
+    status = mem_wb_curr -> status == STAT_BUB ? STAT_AOK : mem_wb_curr -> status;
     if (wb_destE != REG_NONE)
     {
         sim_log("\tWriteback: Wrote 0x%llx to register %s\n",
@@ -1019,8 +1008,6 @@ void do_wb_stage()
                 wb_valM, reg_name(wb_destM));
         set_reg_val(reg, wb_destM, wb_valM);
     }
-    status = mem_wb_curr -> status == STAT_BUB ? STAT_AOK : mem_wb_curr -> status;
-
 }
 
 /* given stall and bubble flag, return the correct control operation */
@@ -1052,18 +1039,21 @@ bool_t pipe_cntl_F_Stall(){
 }
 
 bool_t pipe_cntl_D_Stall(){
-    return (((id_ex_curr->icode) == (I_MRMOVQ) || (id_ex_curr->icode) == 
-        (I_POPQ)) & ((id_ex_curr->destm) == (id_ex_next->srca) || 
-        (id_ex_curr->destm) == (id_ex_next->srcb)));
+    bool_t temp1 = (id_ex_curr->icode == I_MRMOVQ || id_ex_curr->icode == 
+        I_POPQ);
+    bool_t temp2 = (id_ex_curr->destm == id_ex_next->srca || 
+    id_ex_curr->destm == id_ex_next->srcb);
+    return  temp1 && temp2;
 }
 
 bool_t pipe_cntl_D_Bubble(){
-return ((((id_ex_curr->icode) == (I_JMP)) & !(ex_mem_next->takebranch))
-       | (!(((id_ex_curr->icode) == (I_MRMOVQ) || (id_ex_curr->icode) == 
-            (I_POPQ)) & ((id_ex_curr->destm) == (id_ex_next->srca) || 
-            (id_ex_curr->destm) == (id_ex_next->srcb))) & ((I_RET) == 
-          (if_id_curr->icode) || (I_RET) == (id_ex_curr->icode) || (I_RET)
-           == (ex_mem_curr->icode))));
+    bool_t temp1 = id_ex_curr->icode == I_JMP && !ex_mem_next->takebranch;
+    bool_t temp2a = id_ex_curr->icode == I_MRMOVQ || id_ex_curr->icode == I_POPQ;
+    bool_t temp2b = (id_ex_curr->destm == id_ex_next->srca || 
+            id_ex_curr->destm == id_ex_next->srcb);
+    bool_t temp2c = I_RET == if_id_curr->icode || I_RET == id_ex_curr->icode || I_RET
+           == ex_mem_curr->icode;
+    return temp1 || (!(temp2a && temp2b) && temp2c);
 }
 
 bool_t pipe_cntl_E_Stall(){
@@ -1090,8 +1080,8 @@ bool_t pipe_cntl_M_Bubble(){
 }
 
 bool_t pipe_cntl_W_Stall(){
-    return (mem_wb_curr->status == STAT_ADR || mem_wb_curr->status == STAT_INS 
-                || mem_wb_curr->status == STAT_HLT);
+    return mem_wb_curr->status == STAT_ADR || mem_wb_curr->status == STAT_INS 
+                || mem_wb_curr->status == STAT_HLT;
 }
 
 bool_t pipe_cntl_W_Bubble(){
